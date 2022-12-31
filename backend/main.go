@@ -2,55 +2,60 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 
-	"github.com/gorilla/websocket"
+	"github.com/winnie368c/waffle.git/app/user/actions/websocket"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
+// func loadDatabase() {
+// 	database.Connect()
+// 	database.Database.AutoMigrate(&model.Entry{})
+// }
+// func loadEnv() {
+// 	err := godotenv.Load("./api/.env.local")
+// 	if err != nil {
+// 		log.Fatal("Error loading .env file")
+// 	}
+// }
+// func serveApplication() {
+// 	router := gin.Default()
 
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
+// 	publicRoutes := router.Group("/auth")
+// 	publicRoutes.POST("/register", controller.Register)
+// 	publicRoutes.POST("/login", controller.Login)
 
-func reader(conn *websocket.Conn) {
-	for {
-		messageType, p, err := conn.ReadMessage()
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		fmt.Println(string(p))
-
-		if err := conn.WriteMessage(messageType, p); err != nil {
-			log.Println(err)
-			return
-		}
-
-	}
-}
-
-func serveWs(w http.ResponseWriter, r *http.Request) {
-	fmt.Println(r.Host)
-
-	ws, err := upgrader.Upgrade(w, r, nil)
+//		router.Run(":8000")
+//		fmt.Println("Server running on port 8000")
+//	}
+func serveWs(pool *websocket.Pool, w http.ResponseWriter, r *http.Request) {
+	fmt.Println("WebSocket Endpoint Hit")
+	conn, err := websocket.Upgrade(w, r)
 	if err != nil {
-		log.Println(err)
+		fmt.Fprintf(w, "%+v\n", err)
 	}
-	reader(ws)
+
+	client := &websocket.Client{
+		Conn: conn,
+		Pool: pool,
+	}
+
+	pool.Register <- client
+	client.Read()
 }
 
 func setupRoutes() {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Server")
+	pool := websocket.NewPool()
+	go pool.Start()
+
+	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		serveWs(pool, w, r)
 	})
-	http.HandleFunc("/ws", serveWs)
 }
 
 func main() {
-	fmt.Println("Chat App v0.01")
+	// loadEnv()
+	// loadDatabase()
+	// serveApplication()
 	setupRoutes()
 	http.ListenAndServe(":8080", nil)
 }
